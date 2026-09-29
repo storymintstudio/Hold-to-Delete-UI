@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hold to delete</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0b0a;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.12);--text:#f2f4ee;--mute:#8b9186;--ring:#ffffff;--danger:#ff4d3d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme="dark"]{--bg:#0a0b0a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:linear-gradient(rgba(10,11,10,.55),rgba(10,11,10,.7)),url('https://plus.unsplash.com/premium_photo-1789412643366-89fd6cdbf6e5?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHx0b3BpYy1mZWVkfDE3fGlVSXNuVnRqQjBZfHxlbnwwfHx8fHw%3D') center/cover no-repeat,linear-gradient(160deg,#3a1206,#0a0b0a 70%);background-color:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;display:grid;place-items:center;padding:20px}
+.panel{width:min(100%,380px);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+h1{font:800 24px/1.1 'Bricolage Grotesque','DM Sans',sans-serif;margin:2px 0 4px}
+.sub{color:var(--mute);font-size:12px;margin:0 0 14px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);overflow:visible;position:relative;transition:height .35s ease,padding .35s ease,opacity .35s ease}
+.name{flex:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.size{color:var(--mute);font-size:11px}
+.del{position:relative;overflow:hidden;border:1px solid var(--danger);background:transparent;color:var(--text);font:700 12px 'DM Sans',system-ui,sans-serif;padding:9px 12px;border-radius:12px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;min-width:104px;transition:transform .15s}
+.del::before{content:"";position:absolute;inset:0;background:var(--danger);transform-origin:left;transform:scaleX(var(--p,0));z-index:0}
+.del span{position:relative;z-index:1;mix-blend-mode:normal}
+.del:active,.del.holding{transform:scale(.96)}
+.del:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.row.shake{animation:sh .09s linear infinite}
+@keyframes sh{0%{transform:translateX(-1px)}50%{transform:translateX(1px)}100%{transform:translateX(-1px)}}
+.bit{position:absolute;width:6px;height:6px;border-radius:2px;background:var(--danger);pointer-events:none}
+.reset{margin-top:12px;width:100%;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px;font:500 13px 'DM Sans',system-ui,sans-serif;cursor:pointer}
+.reset:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.empty{color:var(--mute);font-size:12px;text-align:center;padding:18px 0 4px}
+@media (prefers-reduced-motion:reduce){.row.shake{animation:none}}
+</style>
+</head>
+<body>
+<div class="panel">
+  <h1>Delete for real</h1>
+  <p class="sub">Press and hold. No accidental clicks.</p>
+  <div id="list"></div>
+  <button class="reset" id="reset" type="button">Restore files</button>
+</div>
+<script>
+const FILES=[["final_v2_REAL.fig","48 MB"],["client-invoice.pdf","212 KB"],["old-portfolio/","3.1 MB"],["node_modules","4.2 GB"]];
+const HOLD=1000,list=document.getElementById('list');
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+function render(){
+  list.innerHTML='';
+  FILES.forEach(([n,s])=>{
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div class="name"></div><div class="size"></div><button class="del" type="button"><span>Hold to delete</span></button>';
+    r.querySelector('.name').textContent=n;r.querySelector('.size').textContent=s;
+    wire(r);list.appendChild(r);
+  });
+}
+
+function wire(row){
+  const b=row.querySelector('.del'),lab=b.querySelector('span');
+  let t0=0,raf=0,on=false;
+  const tick=()=>{
+    const p=Math.min((performance.now()-t0)/HOLD,1);
+    b.style.setProperty('--p',p);
+    lab.textContent=p<1?'Deleting… '+Math.round(p*100)+'%':'Deleted';
+    if(p>=1){stop(true);return}
+    raf=requestAnimationFrame(tick);
+  };
+  const start=e=>{
+    if(on)return;on=true;t0=performance.now();
+    b.classList.add('holding');row.classList.add('shake');
+    raf=requestAnimationFrame(tick);
+  };
+  const stop=done=>{
+    cancelAnimationFrame(raf);
+    if(!on&&!done)return;on=false;
+    b.classList.remove('holding');row.classList.remove('shake');
+    if(done)return kill(row,b);
+    b.style.setProperty('--p',0);lab.textContent='Hold to delete';
+  };
+  b.addEventListener('pointerdown',e=>{b.setPointerCapture(e.pointerId);start()});
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>stop(false)));
+  b.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();start()}});
+  b.addEventListener('keyup',e=>{if(e.key===' '||e.key==='Enter')stop(false)});
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+}
+
+function kill(row,b){
+  const rr=row.getBoundingClientRect(),br=b.getBoundingClientRect();
+  if(!reduce){
+    for(let i=0;i<18;i++){
+      const s=document.createElement('i');s.className='bit';
+      s.style.left=(br.left-rr.left+br.width/2)+'px';s.style.top=(br.top-rr.top+br.height/2)+'px';
+      row.appendChild(s);
+      const a=Math.random()*Math.PI*2,d=40+Math.random()*70;
+      s.animate([{transform:'translate(0,0) scale(1)',opacity:1},{transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d+30}px) rotate(${Math.random()*360}deg) scale(.2)`,opacity:0}],{duration:600,easing:'cubic-bezier(.2,.8,.3,1)'}).onfinish=()=>s.remove();
+    }
+  }
+  row.style.height=rr.height+'px';
+  requestAnimationFrame(()=>{row.style.height='0px';row.style.paddingTop='0';row.style.paddingBottom='0';row.style.opacity='0'});
+  setTimeout(()=>{
+    row.remove();
+    if(!list.querySelector('.row')){list.innerHTML='<div class="empty">Folder is empty. Clean.</div>'}
+  },reduce?0:420);
+}
+
+document.getElementById('reset').addEventListener('click',render);
+render();
+</script>
+</body>
+</html>
